@@ -1,0 +1,5 @@
+.env
+node_modules
+mentorship_data.csv
+hello.ogg
+database.db
