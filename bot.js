@@ -109,6 +109,354 @@ const preloadUserData = () => {
     });
 };
 
+const activeUsers = new Set();
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+
+  const userId = message.author.id;
+  const commands = [
+    '!join_lwd',
+    '!list_new_reg',
+    '!assign_group',
+    '!deassign_group',
+    '!delete_entry',
+  ];
+  const command = message.content.trim().toLowerCase();
+
+  if (commands.includes(command)) {
+    if (activeUsers.has(userId)) {
+      message.channel.send(
+        "You're already running a command. Please wait until it's completed."
+      );
+      return;
+    }
+    activeUsers.add(userId);
+  }
+
+  try {
+    if (command === '!join_lwd' && message.channel.name === 'mentorship') {
+      message.channel
+        .send('🚀 Check your DMs for verification steps! 🛡️')
+        .catch(console.error);
+      const dmChannel =
+        (await message.author.dmChannel) || (await message.author.createDM());
+      try {
+        await dmChannel.send(
+          `Hello! 👋 I'm Mr. DCC Bot! 🤖\nLet\'s get started with your verification process. Please check the instructions below carefully. 📝\n\n`
+        );
+      } catch (error) {
+        console.error('Error handling DM:', error);
+        message.channel.send(
+          `@${message.author.username}, I could not send you a DM 🥲. Please make sure your DMs are open and try again.`
+        );
+      }
+      const enrollmentRegex = /^[a-zA-Z0-9]+$/;
+      let valid = false;
+      let enrollment;
+      while (!valid) {
+        enrollment = await getUserInput(
+          message,
+          dmChannel,
+          enrollmentRegex,
+          'enrollment number'
+        );
+        if (!enrollment) {
+          await dmChannel.send('no input provided! Exiting...');
+          break;
+        }
+        enrollment = enrollment.toUpperCase();
+        valid = await yesNoButton(
+          message,
+          dmChannel,
+          `You entered \`${enrollment}\`. Is this correct?`
+        );
+        if (!valid) {
+          await dmChannel.send('🔄 Starting over...');
+        }
+      }
+      if (!valid) return;
+
+      // Fetch user data
+      const userData = db
+        .prepare('SELECT * FROM users WHERE Enrollment = ?')
+        .get(enrollment);
+      const newUserData = db
+        .prepare('SELECT * FROM newUsers WHERE Enrollment = ?')
+        .get(enrollment);
+
+      const userDiscord_id = JSON.stringify(userData?.Discord)?.id;
+
+      if (newUserData) {
+        dmChannel.send(
+          'You have already registered with us. Please wait for the admin to assign you to a group. 🕒\n our ADMINs are working tirelessly we hope you would understand'
+        );
+      } else if (userData && !userDiscord_id) {
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
+        let email = await getUserInput(message, dmChannel, emailRegex, 'email');
+        if (!email) {
+          await dmChannel.send('no input provided! Exiting...');
+          return;
+        }
+
+        const discordUser = JSON.stringify(message.author);
+
+        db.prepare(
+          'UPDATE users SET Email = ?, Discord = ? WHERE Enrollment = ?'
+        ).run(email, discordUser, enrollment);
+        handleRoleAndChannelAssignment(
+          dmChannel,
+          message.author,
+          userData.group_id
+        );
+      } else if (userData && userDiscord_id === message.author.id) {
+        dmChannel.send(
+          'You are already assigned to a group and your role is set. If you need any help, please reach out to the admins. 👨‍💼👩‍💼'
+        );
+      } else if (userData && userDiscord_id !== message.author.id) {
+        dmChannel.send(
+          'Oops! 🚨 It looks like this enrollment number is already linked to another Discord account. If this seems like a mistake, please contact our admin team. 🛠️'
+        );
+      } else {
+        dmChannel.send('It looks like you are not in our records!');
+        const wantToRegister = await yesNoButton(
+          message,
+          dmChannel,
+          'Do you want to register with 🧑‍🏫 Learn With DCC?'
+        );
+        if (wantToRegister) {
+          dmChannel.send(
+            `🧐 Let's get you registered! Please follow the next steps carefully.`
+          );
+          let name = await getUserInput(
+            message,
+            dmChannel,
+            /^[a-zA-Z ]+$/,
+            'full name 🧑‍🦰'
+          );
+          if (!name) {
+            await dmChannel.send('no input provided! Exiting...');
+            return;
+          }
+
+          const phoneRegex = /^\d{10}$/;
+          let phone = await getUserInput(
+            message,
+            dmChannel,
+            phoneRegex,
+            '10-digit phone number 📱'
+          );
+          if (!phone) {
+            await dmChannel.send('no input provided! Exiting...');
+            return;
+          }
+
+          const emailRegex =
+            /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/; // Email validation regex
+          let email = await getUserInput(
+            message,
+            dmChannel,
+            emailRegex,
+            'email 📧'
+          );
+          if (!email) {
+            await dmChannel.send('no input provided! Exiting...');
+            return;
+          }
+
+          const messageAuthor = JSON.stringify(message.author);
+          db.prepare(
+            'INSERT INTO newUsers (Name, Enrollment, Phone, Email, Discord) VALUES (?, ?, ?, ?, ?)'
+          ).run(name, enrollment, phone, email, messageAuthor);
+          // handleRoleAndChannelAssignment(dmChannel, message.author, newGroup);
+          dmChannel.send(
+            `Thank you for registering! 🎉 Your details have been recorded. Please wait for the admin to assign you to a group. 🕒`
+          );
+
+          const guild = client.guilds.cache.get(process.env.GUILD_ID);
+          const logChannel = guild.channels.cache.find(
+            (channel) =>
+              channel.name === 'mr-dcc-logs' &&
+              channel.type === ChannelType.GuildText
+          );
+          if (logChannel) {
+            logChannel.send(
+              `🆕 New user registered: \`${name}\` with enrollment number \`${enrollment}\` and email \`${email}\`.`
+            );
+          }
+        } else {
+          dmChannel.send(
+            `👋 BYE ... If you change your mind, feel free to reach out to us anytime.`
+          );
+        }
+      }
+    } else if (
+      /*
+       * list new registered users
+       */
+      command === '!list_new_reg' &&
+      message.channel.name === 'admin-mentorship'
+    ) {
+      message.channel.send('the new users who are trying to join DCC are:');
+      const newUsers = db.prepare('SELECT * FROM newUsers').all();
+      // parse the whole newUsers into a table format and send it to the channel
+      let table = '```';
+      table += 'ID\tName\tEnrollment\tPhone\tEmail\n';
+      newUsers.forEach((user) => {
+        table += `${user.ID}\t${user.Name}\t${user.Enrollment}\t${user.Phone}\t${user.Email}\n`;
+      });
+      table += '```';
+      message.channel.send(table);
+    } else if (
+      /*
+       * assign group to the new users
+       * - get the list of IDs
+       * - get the group name
+       * - assign the group to the users
+       */
+      command === '!assign_group' &&
+      message.channel.name === 'admin-mentorship'
+    ) {
+      message.channel.send(
+        'Now we will proceed to assign the new users to the groups'
+      );
+
+      const idList = await getUserInput(
+        message,
+        message.channel,
+        /^[0-9,]+$/,
+        'ID list separated by commas'
+      );
+      if (!idList) {
+        message.channel.send('No IDs provided. Exiting...');
+        return;
+      }
+
+      const group = await getUserInput(
+        message,
+        message.channel,
+        /^[a-zA-Z0-9]+$/,
+        'group'
+      );
+      if (!group) {
+        message.channel.send('No group provided. Exiting...');
+        return;
+      }
+
+      const idArray = idList.split(',');
+      idArray.forEach((id, index) => {
+        setTimeout(() => {
+          const userData = db
+            .prepare('SELECT * FROM newUsers WHERE ID = ?')
+            .get(id);
+          if (userData) {
+            const discordUser = JSON.parse(userData.Discord);
+            handleRoleAndChannelAssignment(message.channel, discordUser, group);
+            db.prepare(
+              'INSERT INTO users (group_id, Name, Enrollment, Phone, Email, Discord) VALUES (?, ?, ?, ?, ?, ?)'
+            ).run(
+              group,
+              userData.Name,
+              userData.Enrollment,
+              userData.Phone,
+              userData.Email,
+              userData.Discord
+            );
+            db.prepare('DELETE FROM newUsers WHERE ID = ?').run(id);
+            message.channel.send(
+              `User with ID \`${id}\` has been assigned to group \`${group}\``
+            );
+          } else {
+            if (id !== undefined)
+              message.channel.send(
+                `User with ID \`${id}\` not found in the database.`
+              );
+          }
+        }, index * 1000);
+      });
+    } else if (
+      command === '!deassign_group' &&
+      message.channel.name === 'admin-mentorship'
+    ) {
+      message.channel.send(
+        'Now we will proceed with de-assigning the users from the groups'
+      );
+      const enrollment = await getUserInput(
+        message,
+        message.channel,
+        /^[a-zA-Z0-9]+$/,
+        'enrollment number'
+      );
+      if (!enrollment) {
+        message.channel.send('No enrollment number provided. Exiting...');
+        return;
+      }
+      const userData = db
+        .prepare('SELECT * FROM users WHERE Enrollment = ?')
+        .get(enrollment);
+
+      if (userData) {
+        if (!userData.Discord) {
+          message.channel.send(
+            `User with Enrollment \`${enrollment}\` does not have a Discord account linked.`
+          );
+          return;
+        }
+        const discordUser = JSON.parse(userData.Discord);
+        console.log(userData.group_id);
+        handleRoleAndChannelDeAssignment(
+          message.channel,
+          discordUser,
+          userData.group_id,
+          enrollment
+        );
+        message.channel.send(
+          `User with Enrollment \`${enrollment}\` has been deassigned from group \`${userData.group_id}\``
+        );
+      }
+    } else if (
+      command === '!delete_entry' &&
+      message.channel.name === 'admin-mentorship'
+    ) {
+      const idList = await getUserInput(
+        message,
+        message.channel,
+        /^[0-9]+$/,
+        'ID list, separated by commas'
+      );
+      if (!idList) {
+        message.channel.send('No IDs provided. Exiting...');
+        return;
+      }
+      const idArray = idList.split(',');
+      idArray.forEach((id, _) => {
+        const userData = db
+          .prepare('SELECT * FROM newUsers WHERE ID = ?')
+          .get(id);
+        if (userData) {
+          db.prepare('DELETE FROM newUsers WHERE ID = ?').run(id);
+          message.channel.send(
+            `User with Enrollment \`${userData.Enrollment}\` has been deleted from the new users list`
+          );
+        } else {
+          message.channel.send(
+            `User with Enrollment \`${userData.Enrollment}\` not found in the new users list. Make sure you de-assigned the user already. If not please de-assign the user first using \`!deassign_group\`.`
+          );
+        }
+      });
+    } else {
+      return;
+    }
+
+    // Remove the user from the active set once the command is done
+    activeUsers.delete(userId);
+  } catch (error) {
+    console.error('Error handling command:', error);
+    message.channel.send('An error occurred while processing your command.');
+    activeUsers.delete(userId);
+  }
+});
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content === 'ping') {
@@ -135,327 +483,8 @@ client.on('messageCreate', async (message) => {
 
   if (message.content === '!help') {
     message.channel.send(
-      'Commands:\n`!help` - Display this help message \n`!joinLWD` - Join the LWD Discord server\n`!list_new_reg` - List the new users who are trying to join DCC\n`!assign_group` - Assign the new users to the groups'
+      'Commands:\n`!help` - Display this help message \n`!join_lwd` - Join the LWD Discord server\n`!list_new_reg` - List the new users who are trying to join DCC\n`!assign_group` - Assign the new users to the groups'
     );
-  }
-
-  if (
-    message.content.trim().toLowerCase() === '!joinlwd' &&
-    message.channel.name === 'mentorship'
-  ) {
-    message.channel
-      .send('🚀 Check your DMs for verification steps! 🛡️')
-      .catch(console.error);
-    const dmChannel =
-      (await message.author.dmChannel) || (await message.author.createDM());
-    try {
-      await dmChannel.send(
-        `Hello! 👋 I'm Mr. DCC Bot! 🤖\nLet\'s get started with your verification process. Please check the instructions below carefully. 📝\n\n`
-      );
-    } catch (error) {
-      console.error('Error handling DM:', error);
-      message.channel.send(
-        `@${message.author.username}, I could not send you a DM 🥲. Please make sure your DMs are open and try again.`
-      );
-    }
-    const enrollmentRegex = /^[a-zA-Z0-9]+$/;
-    let valid = false;
-    let enrollment;
-    while (!valid) {
-      enrollment = await getUserInput(
-        message,
-        dmChannel,
-        enrollmentRegex,
-        'enrollment number'
-      );
-      if (!enrollment) {
-        await dmChannel.send('no input provided! Exiting...');
-        break;
-      }
-      enrollment = enrollment.toUpperCase();
-      valid = await yesNoButton(
-        message,
-        dmChannel,
-        `You entered \`${enrollment}\`. Is this correct?`
-      );
-      if (!valid) {
-        await dmChannel.send('🔄 Starting over...');
-      }
-    }
-    if (!valid) return;
-
-    // Fetch user data
-    const userData = db
-      .prepare('SELECT * FROM users WHERE Enrollment = ?')
-      .get(enrollment);
-    const newUserData = db
-      .prepare('SELECT * FROM newUsers WHERE Enrollment = ?')
-      .get(enrollment);
-
-    const userDiscord_id = JSON.stringify(userData?.Discord)?.id;
-
-    if (newUserData) {
-      dmChannel.send(
-        'You have already registered with us. Please wait for the admin to assign you to a group. 🕒\n our ADMINs are working tirelessly we hope you would understand'
-      );
-    } else if (userData && !userDiscord_id) {
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
-      let email = await getUserInput(message, dmChannel, emailRegex, 'email');
-      if (!email) {
-        await dmChannel.send('no input provided! Exiting...');
-        return;
-      }
-
-      const discordUser = JSON.stringify(message.author);
-
-      db.prepare(
-        'UPDATE users SET Email = ?, Discord = ? WHERE Enrollment = ?'
-      ).run(email, discordUser, enrollment);
-      handleRoleAndChannelAssignment(
-        dmChannel,
-        message.author,
-        userData.group_id
-      );
-    } else if (userData && userDiscord_id === message.author.id) {
-      dmChannel.send(
-        'You are already assigned to a group and your role is set. If you need any help, please reach out to the admins. 👨‍💼👩‍💼'
-      );
-    } else if (userData && userDiscord_id !== message.author.id) {
-      dmChannel.send(
-        'Oops! 🚨 It looks like this enrollment number is already linked to another Discord account. If this seems like a mistake, please contact our admin team. 🛠️'
-      );
-    } else {
-      dmChannel.send('It looks like you are not in our records!');
-      const wantToRegister = await yesNoButton(
-        message,
-        dmChannel,
-        'Do you want to register with 🧑‍🏫 Learn With DCC?'
-      );
-      if (wantToRegister) {
-        dmChannel.send(
-          `🧐 Let's get you registered! Please follow the next steps carefully.`
-        );
-        let name = await getUserInput(
-          message,
-          dmChannel,
-          /^[a-zA-Z ]+$/,
-          'full name 🧑‍🦰'
-        );
-        if (!name) {
-          await dmChannel.send('no input provided! Exiting...');
-          return;
-        }
-
-        const phoneRegex = /^\d{10}$/;
-        let phone = await getUserInput(
-          message,
-          dmChannel,
-          phoneRegex,
-          '10-digit phone number 📱'
-        );
-        if (!phone) {
-          await dmChannel.send('no input provided! Exiting...');
-          return;
-        }
-
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/; // Email validation regex
-        let email = await getUserInput(
-          message,
-          dmChannel,
-          emailRegex,
-          'email 📧'
-        );
-        if (!email) {
-          await dmChannel.send('no input provided! Exiting...');
-          return;
-        }
-
-        const messageAuthor = JSON.stringify(message.author);
-        db.prepare(
-          'INSERT INTO newUsers (Name, Enrollment, Phone, Email, Discord) VALUES (?, ?, ?, ?, ?)'
-        ).run(name, enrollment, phone, email, messageAuthor);
-        // handleRoleAndChannelAssignment(dmChannel, message.author, newGroup);
-        dmChannel.send(
-          `Thank you for registering! 🎉 Your details have been recorded. Please wait for the admin to assign you to a group. 🕒`
-        );
-
-        const guild = client.guilds.cache.get(process.env.GUILD_ID);
-        const logChannel = guild.channels.cache.find(
-          (channel) =>
-            channel.name === 'mr-dcc-logs' &&
-            channel.type === ChannelType.GuildText
-        );
-        if (logChannel) {
-          logChannel.send(
-            `🆕 New user registered: \`${name}\` with enrollment number \`${enrollment}\` and email \`${email}\`.`
-          );
-        }
-      } else {
-        dmChannel.send(
-          `👋 BYE ... If you change your mind, feel free to reach out to us anytime.`
-        );
-      }
-    }
-  }
-
-  /*
-   * list new registered users
-   */
-  if (
-    message.content.trim().toLowerCase() === '!list_new_reg' &&
-    message.channel.name === 'admin-mentorship'
-  ) {
-    message.channel.send('the new users who are trying to join DCC are:');
-    const newUsers = db.prepare('SELECT * FROM newUsers').all();
-    // parse the whole newUsers into a table format and send it to the channel
-    let table = '```';
-    table += 'ID\tName\tEnrollment\tPhone\tEmail\n';
-    newUsers.forEach((user) => {
-      table += `${user.ID}\t${user.Name}\t${user.Enrollment}\t${user.Phone}\t${user.Email}\n`;
-    });
-    table += '```';
-    message.channel.send(table);
-  }
-  /*
-   * assign group to the new users
-   * - get the list of IDs
-   * - get the group name
-   * - assign the group to the users
-   */
-  if (
-    message.content.trim().toLowerCase() === '!assign_group' &&
-    message.channel.name === 'admin-mentorship'
-  ) {
-    message.channel.send(
-      'Now we will proceed to assign the new users to the groups'
-    );
-
-    const idList = await getUserInput(
-      message,
-      message.channel,
-      /^[0-9,]+$/,
-      'ID list separated by commas'
-    );
-    if (!idList) {
-      message.channel.send('No IDs provided. Exiting...');
-      return;
-    }
-
-    const group = await getUserInput(
-      message,
-      message.channel,
-      /^[a-zA-Z0-9]+$/,
-      'group'
-    );
-    if (!group) {
-      message.channel.send('No group provided. Exiting...');
-      return;
-    }
-
-    const idArray = idList.split(',');
-    idArray.forEach((id, index) => {
-      setTimeout(() => {
-        const userData = db
-          .prepare('SELECT * FROM newUsers WHERE ID = ?')
-          .get(id);
-        if (userData) {
-          const discordUser = JSON.parse(userData.Discord);
-          handleRoleAndChannelAssignment(message.channel, discordUser, group);
-          db.prepare(
-            'INSERT INTO users (group_id, Name, Enrollment, Phone, Email, Discord) VALUES (?, ?, ?, ?, ?, ?)'
-          ).run(
-            group,
-            userData.Name,
-            userData.Enrollment,
-            userData.Phone,
-            userData.Email,
-            userData.Discord
-          );
-          db.prepare('DELETE FROM newUsers WHERE ID = ?').run(id);
-          message.channel.send(
-            `User with ID \`${id}\` has been assigned to group \`${group}\``
-          );
-        } else {
-          if (id !== undefined)
-            message.channel.send(
-              `User with ID \`${id}\` not found in the database.`
-            );
-        }
-      }, index * 1000);
-    });
-  }
-
-  if (
-    message.content.trim().toLowerCase() === '!deassign_group' &&
-    message.channel.name === 'admin-mentorship'
-  ) {
-    message.channel.send(
-      'Now we will proceed with de-assigning the users from the groups'
-    );
-    const enrollment = await getUserInput(
-      message,
-      message.channel,
-      /^[a-zA-Z0-9]+$/,
-      'enrollment number'
-    );
-    if (!enrollment) {
-      message.channel.send('No enrollment number provided. Exiting...');
-      return;
-    }
-    const userData = db
-      .prepare('SELECT * FROM users WHERE Enrollment = ?')
-      .get(enrollment);
-
-    if (userData) {
-      if (!userData.Discord) {
-        message.channel.send(
-          `User with Enrollment \`${enrollment}\` does not have a Discord account linked.`
-        );
-        return;
-      }
-      const discordUser = JSON.parse(userData.Discord);
-      console.log(userData.group_id);
-      handleRoleAndChannelDeAssignment(
-        message.channel,
-        discordUser,
-        userData.group_id,
-        enrollment
-      );
-      message.channel.send(
-        `User with Enrollment \`${enrollment}\` has been deassigned from group \`${userData.group_id}\``
-      );
-    }
-  }
-  if (
-    message.content.trim().toLowerCase() === '!delete_user' &&
-    message.channel.name === 'admin-mentorship'
-  ) {
-    const idList = await getUserInput(
-      message,
-      message.channel,
-      /^[0-9]+$/,
-      'ID list, separated by commas'
-    );
-    if (!idList) {
-      message.channel.send('No IDs provided. Exiting...');
-      return;
-    }
-    const idArray = idList.split(',');
-    idArray.forEach((id, _) => {
-      const userData = db
-        .prepare('SELECT * FROM newUsers WHERE ID = ?')
-        .get(id);
-      if (userData) {
-        db.prepare('DELETE FROM newUsers WHERE ID = ?').run(id);
-        message.channel.send(
-          `User with Enrollment \`${userData.Enrollment}\` has been deleted from the new users list`
-        );
-      } else {
-        message.channel.send(
-          `User with Enrollment \`${userData.Enrollment}\` not found in the new users list. Make sure you de-assigned the user already. If not please de-assign the user first using \`!deassign_group\`.`
-        );
-      }
-    });
   }
 });
 
