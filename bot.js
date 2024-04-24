@@ -163,7 +163,8 @@ client.on('messageCreate', async (message) => {
         );
         if (!enrollment) {
           await dmChannel.send('no input provided! Exiting...');
-          break;
+          activeUsers.delete(userId);
+          return;
         }
         enrollment = enrollment.toUpperCase();
         valid = await yesNoButton(
@@ -175,7 +176,10 @@ client.on('messageCreate', async (message) => {
           await dmChannel.send('🔄 Starting over...');
         }
       }
-      if (!valid) return;
+      if (!valid) {
+        activeUsers.delete(userId);
+        return;
+      }
 
       // Fetch user data
       const userData = db
@@ -196,6 +200,7 @@ client.on('messageCreate', async (message) => {
         let email = await getUserInput(message, dmChannel, emailRegex, 'email');
         if (!email) {
           await dmChannel.send('no input provided! Exiting...');
+          activeUsers.delete(userId);
           return;
         }
 
@@ -236,6 +241,7 @@ client.on('messageCreate', async (message) => {
           );
           if (!name) {
             await dmChannel.send('no input provided! Exiting...');
+            activeUsers.delete(userId);
             return;
           }
 
@@ -248,6 +254,7 @@ client.on('messageCreate', async (message) => {
           );
           if (!phone) {
             await dmChannel.send('no input provided! Exiting...');
+            activeUsers.delete(userId);
             return;
           }
 
@@ -261,6 +268,7 @@ client.on('messageCreate', async (message) => {
           );
           if (!email) {
             await dmChannel.send('no input provided! Exiting...');
+            activeUsers.delete(userId);
             return;
           }
 
@@ -329,6 +337,7 @@ client.on('messageCreate', async (message) => {
       );
       if (!idList) {
         message.channel.send('No IDs provided. Exiting...');
+        activeUsers.delete(userId);
         return;
       }
 
@@ -340,6 +349,7 @@ client.on('messageCreate', async (message) => {
       );
       if (!group) {
         message.channel.send('No group provided. Exiting...');
+        activeUsers.delete(userId);
         return;
       }
 
@@ -389,6 +399,7 @@ client.on('messageCreate', async (message) => {
       );
       if (!enrollment) {
         message.channel.send('No enrollment number provided. Exiting...');
+        activeUsers.delete(userId);
         return;
       }
       const userData = db
@@ -400,6 +411,7 @@ client.on('messageCreate', async (message) => {
           message.channel.send(
             `User with Enrollment \`${enrollment}\` does not have a Discord account linked.`
           );
+          activeUsers.delete(userId);
           return;
         }
         const discordUser = JSON.parse(userData.Discord);
@@ -426,6 +438,7 @@ client.on('messageCreate', async (message) => {
       );
       if (!idList) {
         message.channel.send('No IDs provided. Exiting...');
+        activeUsers.delete(userId);
         return;
       }
       const idArray = idList.split(',');
