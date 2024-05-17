@@ -135,7 +135,7 @@ client.on('messageCreate', async (message) => {
   }
 
   try {
-    if (command === '!join_lwd' && message.channel.name === 'mentorship') {
+    if (command === '!join_lwd' && message.channel.name === 'welcome-to-lwd') {
       message.channel
         .send('🚀 Check your DMs for verification steps! 🛡️')
         .catch(console.error);
@@ -476,23 +476,17 @@ client.on('messageCreate', async (message) => {
     message.channel.send('pong');
   }
 
-  if (message.content.trim().toLowerCase() === 'cutie') {
-    message.channel.send('A fresh cutie coming through! 🥰');
-    message.channel.send('https://s9.gifyu.com/images/SZozs.gif');
-  }
+  // if (message.content.trim().toLowerCase() === 'cutie') {
+  //   message.channel.send('A fresh cutie coming through! 🥰');
+  //   message.channel.send('https://s9.gifyu.com/images/SZozs.gif');
+  // }
 
-  if (message.content.trim().toLowerCase() === 'ok') {
-    message.channel.send('OK 🫠');
-    message.channel.send(
-      'https://cdn.discordapp.com/attachments/1231682621252042812/1232422515704336485/image0.jpg?ex=66296669&is=662814e9&hm=e313fb3dfdea82574267ad87cd72c4004bfaa04136e8a2ff17875ad0944ae571&'
-    );
-  }
-
-  if (message.content.trim().toLowerCase() === 'hello') {
-    // send a voice message in the .ogg file
-    const attachment = new AttachmentBuilder('./hello.ogg');
-    message.channel.send({ files: [attachment] });
-  }
+  // if (message.content.trim().toLowerCase() === 'ok') {
+  //   message.channel.send('OK 🫠');
+  //   message.channel.send(
+  //     'https://cdn.discordapp.com/attachments/1231682621252042812/1232422515704336485/image0.jpg?ex=66296669&is=662814e9&hm=e313fb3dfdea82574267ad87cd72c4004bfaa04136e8a2ff17875ad0944ae571&'
+  //   );
+  // }
 
   if (message.content === '!help') {
     message.channel.send(
@@ -583,72 +577,75 @@ async function yesNoButton(message, channel, question) {
 
 async function handleRoleAndChannelAssignment(channel, user, groupName) {
   const guild = client.guilds.cache.get(process.env.GUILD_ID);
-  let role = guild.roles.cache.find((role) => role.name === 'Mentee');
+  const groupName2 = "LWD - GR "+groupName;
+  console.log("LWD - GR",groupName2);
+  let role = guild.roles.cache.find((role) => role.name === groupName2);
 
   if (!role) {
     console.log('Mentee role does not exist, creating one...');
     role = await guild.roles.create({
-      name: 'Mentee',
+      name: groupName2,
       color: '#FF5733',
       permissions: [],
     });
   }
 
   // Find or create the category
-  let category = guild.channels.cache.find(
-    (c) =>
-      c.name === `Group ${groupName}` && c.type === ChannelType.GuildCategory
-  );
-  if (!category) {
-    console.log(`Creating new category and channels for group ${groupName}`);
-    category = await guild.channels.create({
-      name: `Group ${groupName}`,
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionsBitField.Flags.ViewChannel],
-        },
-        {
-          id: role.id,
-          deny: [PermissionsBitField.Flags.ViewChannel],
-        },
-      ],
-    });
+  // let category = guild.channels.cache.find(
+  //   (c) =>
+  //     c.name === `Group ${groupName}` && c.type === ChannelType.GuildCategory
+  // );
+  // if (!category) {
+  //   console.log(`Creating new category and channels for group ${groupName}`);
+  //   category = await guild.channels.create({
+  //     name: `Group ${groupName}`,
+  //     type: ChannelType.GuildCategory,
+  //     permissionOverwrites: [
+  //       {
+  //         id: guild.id,
+  //         deny: [PermissionsBitField.Flags.ViewChannel],
+  //       },
+  //       {
+  //         id: role.id,
+  //         deny: [PermissionsBitField.Flags.ViewChannel],
+  //       },
+  //     ],
+  //   });
 
     // Create channels for category
-    await createOrUpdateChannel(
-      guild,
-      category,
-      'announcements',
-      'Group announcements and important info'
-    );
-    await createOrUpdateChannel(
-      guild,
-      category,
-      'general-chat',
-      'General discussion for the group'
-    );
-    await createOrUpdateChannel(
-      guild,
-      category,
-      'voice-chat',
-      '',
-      ChannelType.GuildVoice
-    );
-  }
-
+    // await createOrUpdateChannel(
+    //   guild,
+    //   category,
+    //   'announcements',
+    //   'Group announcements and important info'
+    // );
+    // await createOrUpdateChannel(
+    //   guild,
+    //   category,
+    //   'general-chat',
+    //   'General discussion for the group'
+    // );
+    // await createOrUpdateChannel(
+    //   guild,
+    //   category,
+    //   'voice-chat',
+    //   '',
+    //   ChannelType.GuildVoice
+    // );
+  // }
+//
   // Ensure the user has the Mentee role
   const member = await guild.members.fetch(user.id);
   // Update existing channels
-  await ensureUserAccess(guild, category, user);
+  // await ensureUserAccess(guild, category, user);
+  // console.log("role:",role);
   await member.roles.add(role);
 
   channel.send(
     `Verification successful! ✅ Now you have access to exclusive channels in \`#Group ${groupName}\`. Enjoy your journey with us! 🌟`
   );
   console.log(
-    `Assigned 'Mentee' role and access to 'Group ${groupName}' channel for user ${user.username}`
+    `Assigned '${groupName2}' role and access to 'Group ${groupName}' channel for user ${user.username}`
   );
   const logChannel = guild.channels.cache.find(
     (channel) =>
@@ -656,7 +653,7 @@ async function handleRoleAndChannelAssignment(channel, user, groupName) {
   );
   if (logChannel) {
     logChannel.send(
-      `✅ Assigned \`Mentee\` role and access to \`#Group ${groupName}\` channel for user \`@${user.username}\``
+      `✅ Assigned \`'${groupName2}'\` role and access to \`#Group ${groupName}\` channel for user \`@${user.username}\``
     );
   } else {
     console.log("Couldn't find the #mentorship-logs channel.");
