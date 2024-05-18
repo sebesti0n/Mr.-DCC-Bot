@@ -818,3 +818,6 @@ async function removeUserAccess(guild, catagory, user) {
 // };
 
 client.login(process.env.DISCORD_TOKEN);
+module.exports = (req, res) => {
+    res.status(200).send('Bot is running');
+};
