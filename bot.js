@@ -2,7 +2,10 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const sqlite3 = require('better-sqlite3');
 const dotenv = require('dotenv');
+const express = require('express');
+const app=express();
 dotenv.config();
+const port = process.env.PORT||3008;
 
 const {
   Client,
@@ -818,6 +821,10 @@ async function removeUserAccess(guild, catagory, user) {
 // };
 
 client.login(process.env.DISCORD_TOKEN);
-module.exports = (req, res) => {
-    res.status(200).send('Bot is running');
-};
+app.get('/', (req, res) => {
+  res.status(200).send('Bot is running');
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
