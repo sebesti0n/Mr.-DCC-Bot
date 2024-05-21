@@ -17,6 +17,7 @@ const {
   ChannelType,
   PermissionsBitField,
   AttachmentBuilder,
+  PermissionFlagsBits,
 } = require('discord.js');
 
 // Define intents using GatewayIntentBits
