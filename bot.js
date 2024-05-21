@@ -460,6 +460,26 @@ client.on('messageCreate', async (message) => {
           );
         }
       });
+    } else if(command === '!member_list_lwd'){
+      const categoryId =process.env.LWD_CATEGORY_ID; 
+        if (message.channel.parentId !== categoryId) {
+          return ;
+          
+        }
+      let table = '```';
+      table += 'username\tName\n';
+      
+        const members = await getMembersWithRolePermissionsInChannel(message.guild, message.channel.id);
+          members.forEach(member=>{
+            if(member.name!=null){
+            table += `${member.username}\t${member.name}\n`;
+          }
+        else{
+          table += `${member.username}\t - \n`;
+        }})
+          table += '```';
+    message.channel.send(`The List of Members in ${message.channel.name}:`);
+    message.channel.send(table);
     } else {
       return;
     }
@@ -497,7 +517,30 @@ client.on('messageCreate', async (message) => {
     );
   }
 });
-
+async function getMembersWithRolePermissionsInChannel(guild, channelId){
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel) {
+      throw new Error(`Channel with ID ${channelId} not found`);
+  }
+  const membersSet = new Set();
+  channel.guild.roles.cache.filter(role => {
+      const permissions = channel.permissionsFor(role);
+      return permissions && permissions.has(PermissionFlagsBits.ViewChannel);
+       
+  }).forEach(role => {
+    role.members.forEach(member => {
+        if(member.user.bot===false)
+        membersSet.add(member);
+    });
+});
+const members = Array.from(membersSet).map(member => ({
+    id: member.id,
+    username: member.user.username,
+    name: member.user.globalName
+    
+}));
+return members;
+}
 async function getUserInput(message, channel, regex, fieldName) {
   const filter = (m) => m.author.id === message.author.id;
   let valid = false,
