@@ -127,6 +127,7 @@ client.on('messageCreate', async (message) => {
     '!list_new_reg',
     '!assign_group',
     '!new_mentees',
+    '!delete_mentees',
     '!deassign_group',
     '!delete_entry',
   ];
