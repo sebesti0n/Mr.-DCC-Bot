@@ -491,6 +491,45 @@ client.on('messageCreate', async (message) => {
       });
       table += '```';
       message.channel.send(table);
+    } else if (
+      command === '!delete_mentees' &&
+      message.channel.name === 'admin-mentorship'
+    ) {message.channel.send(
+      'Now we will proceed to deletion of the new mentees:'
+    );
+
+    const idList = await getUserInput(
+      message,
+      message.channel,
+      /^[0-9,]+$/,
+      'ID list separated by commas'
+    );
+    if (!idList) {
+      message.channel.send('No IDs provided. Exiting...');
+      activeUsers.delete(userId);
+      return;
+    }
+      const idArray = idList.split(',');
+      idArray.forEach((id, index) => {
+
+        setTimeout(() => {
+          const menteeData = db
+            .prepare('SELECT * FROM newMentees WHERE ID = ?')
+            .get(id);
+          if(menteeData){
+          db.prepare('DELETE FROM newMentees WHERE ID = ?').run(id);
+            message.channel.send(
+              `User with ID \`${id}\` is deleted from Mentee Table.`
+            );
+          } else {
+            if (id !== undefined)
+              message.channel.send(
+                `User with ID \`${id}\` not found in the database.`
+              );
+            }
+        },index*1000);
+        
+      });
     } else
      if(command === '!member_list_lwd'){
       const categoryId = process.env.LWD_CATEGORY_ID; 
