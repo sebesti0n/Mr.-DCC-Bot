@@ -50,6 +50,9 @@ const setupDatabase = () => {
   db.prepare(
     'CREATE TABLE IF NOT EXISTS groups (group_id TEXT PRIMARY KEY, number_of_members INTEGER)'
   ).run();
+  db.prepare(
+    'CREATE TABLE IF NOT EXISTS newMentees (ID INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, Enrollment TEXT, group_id TEXT, Phone TEXT, Email TEXT)'
+  ).run();
   preloadGroups();
   preloadUserData();
 };
@@ -123,6 +126,7 @@ client.on('messageCreate', async (message) => {
     '!join_lwd',
     '!list_new_reg',
     '!assign_group',
+    '!new_mentees',
     '!deassign_group',
     '!delete_entry',
   ];
@@ -192,6 +196,9 @@ client.on('messageCreate', async (message) => {
       const newUserData = db
         .prepare('SELECT * FROM newUsers WHERE Enrollment = ?')
         .get(enrollment);
+      const newMenteeExist = db
+        .prepare('SELECT * FROM newMentees WHERE ENROLLMENT = ?')
+        .get(enrollment);
 
       const userDiscord_id = JSON.stringify(userData?.Discord)?.id;
 
@@ -218,6 +225,9 @@ client.on('messageCreate', async (message) => {
           message.author,
           userData.group_id
         );
+        db.prepare(
+          'INSERT INTO newMentees (Name, Enrollment, group_id, Phone, Email) VALUES (?, ?, ?, ?, ?)'
+        ).run(userData.Name, userData.Enrollment, userData.group_id, userData.Phone, userData.Email);
       } else if (userData && userDiscord_id === message.author.id) {
         dmChannel.send(
           'You are already assigned to a group and your role is set. If you need any help, please reach out to the admins. 👨‍💼👩‍💼'
@@ -281,6 +291,9 @@ client.on('messageCreate', async (message) => {
             'INSERT INTO newUsers (Name, Enrollment, Phone, Email, Discord) VALUES (?, ?, ?, ?, ?)'
           ).run(name, enrollment, phone, email, messageAuthor);
           // handleRoleAndChannelAssignment(dmChannel, message.author, newGroup);
+          db.prepare(
+            'INSERT INTO newMentees (Name, Enrollment, group_id, Phone, Email) VALUES (?, ?, ?, ?, ?)'
+          ).run(name, enrollment, '-', phone, email);
           dmChannel.send(
             `Thank you for registering! 🎉 Your details have been recorded. Please wait for the admin to assign you to a group. 🕒`
           );
@@ -376,7 +389,11 @@ client.on('messageCreate', async (message) => {
               userData.Email,
               userData.Discord
             );
+            db.prepare(
+              'UPDATE newMentees SET group_id = ? WHERE Enrollment = ?'
+            ).run(group, userData.Enrollment);
             db.prepare('DELETE FROM newUsers WHERE ID = ?').run(id);
+
             message.channel.send(
               `User with ID \`${id}\` has been assigned to group \`${group}\``
             );
@@ -461,6 +478,19 @@ client.on('messageCreate', async (message) => {
           );
         }
       });
+    }else if (
+      command === '!new_mentees' &&
+      message.channel.name === 'admin-mentorship'
+    ) {
+      message.channel.send('The new Mentees who are trying to join DCC LWD are:');
+      const newMentees = db.prepare('SELECT * FROM newMentees').all();
+      let table = '```';
+      table += 'ID\tName\tEnrollment\tGroup\tPhone\tEmail\n';
+      newMentees.forEach((mentee) => {
+        table += `${mentee.ID}\t${mentee.Name}\t${mentee.Enrollment}\t${mentee.group_id}\t${mentee.Phone}\t${mentee.Email}\n`;
+      });
+      table += '```';
+      message.channel.send(table);
     } else
      if(command === '!member_list_lwd'){
       const categoryId = process.env.LWD_CATEGORY_ID; 
@@ -481,6 +511,10 @@ client.on('messageCreate', async (message) => {
         }
       })
           table += '```';
+    if (table.length>375){
+      message.channel.send(`Everyone is present in this ${message.channel.name} channel.`);
+      return;
+    }
     message.channel.send(`The List of Members in ${message.channel.name}:`);
     message.channel.send(table);
     } else {
